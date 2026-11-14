@@ -465,7 +465,7 @@
         <table class="summary-table">
           <thead>
             <tr>
-              <th>Engineer Name</th>
+              <th>Name</th>
               <th style="text-align:center;">Total</th>
               <th style="text-align:center;">Wknd</th>
             </tr>
@@ -479,7 +479,7 @@
     <div class="card contacts-section">
       <div class="card-header">
         <h2>📞 Contact Details</h2>
-        <input type="text" id="contactSearch" placeholder="Search engineer..." oninput="renderContacts()"
+        <input type="text" id="contactSearch" placeholder="Search contacts..." oninput="renderContacts()"
                style="padding:0.4rem 0.75rem; border:1px solid var(--border); border-radius:8px; font-size:0.85rem;">
       </div>
       <div class="contacts-grid" id="contactsGrid"></div>
@@ -517,8 +517,8 @@
           </div>
           <div class="card-body">
             <p style="font-size:0.86rem; color:var(--text-muted);">
-              Upload your monthly roster spreadsheet using our dedicated template (or your existing <code>Oncall_Roster.xlsx</code>).
-              The file should include an <strong>Assignments</strong> sheet (<code>Date</code>, <code>Engineer Name</code>) and optionally a <strong>Contact Details</strong> sheet.
+              Upload monthly roster spreadsheet using dedicated template (or existing <code>Oncall_Roster.xlsx</code>).
+              The file should include an <strong>Assignments</strong> sheet (<code>Date</code>, <code>Employee Name</code>) and optionally a <strong>Contact Details</strong> sheet.
             </p>
 
             <div class="dropzone" id="dropzone" onclick="document.getElementById('excelFileInput').click()">
@@ -564,11 +564,11 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Primary Engineer</label>
+                <label>Primary Member</label>
                 <input type="text" id="manualPrimary" list="engineerSuggestions" placeholder="e.g. Kunal Kapoor" />
               </div>
               <div class="form-group">
-                <label>Secondary Engineer (Optional)</label>
+                <label>Secondary Member</label>
                 <input type="text" id="manualSecondary" list="engineerSuggestions" placeholder="e.g. Abhishek Gaddiparthi" />
               </div>
             </div>
@@ -587,12 +587,12 @@
         <!-- Manage Contacts Table -->
         <div class="card">
           <div class="card-header">
-            <h2>👥 Manage Engineer Contacts</h2>
+            <h2>👥 Manage Contacts</h2>
           </div>
           <div class="card-body">
             <div class="form-row">
               <div class="form-group">
-                <label>Engineer Name</label>
+                <label>Name</label>
                 <input type="text" id="newContactName" placeholder="Full Name" />
               </div>
               <div class="form-group">
@@ -610,7 +610,7 @@
               <table class="summary-table">
                 <thead>
                   <tr>
-                    <th>Engineer Name</th>
+                    <th>Name</th>
                     <th>Phone</th>
                     <th>Email</th>
                     <th style="text-align:right;">Action</th>
