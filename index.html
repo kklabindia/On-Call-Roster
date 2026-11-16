@@ -6,6 +6,70 @@
   <title>E2E Team - On-Call Roster</title>
   <!-- SheetJS for Excel (.xlsx) Parsing & Template Generation -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <!-- Firebase Realtime Database SDKs & Cloud Sync Integration -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQhh0ElwhnI3z2eLLZVz545XEe23JpMcs",
+      authDomain: "e2e-oncall-roster.firebaseapp.com",
+      databaseURL: "https://e2e-oncall-roster-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "e2e-oncall-roster",
+      storageBucket: "e2e-oncall-roster.firebasestorage.app",
+      messagingSenderId: "662686892112",
+      appId: "1:662686892112:web:aaf4dda68982fc04f21155",
+      measurementId: "G-CPP4BCQP71"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const rosterRef = ref(db, "roster/main_data");
+
+    // Fallback data if database is empty
+    const defaultEmbeddedData = JSON.parse(document.getElementById("embedded-data").textContent);
+    window.appState = defaultEmbeddedData;
+
+    async function initRealtimeDB() {
+      try {
+        const snapshot = await get(rosterRef);
+        if (snapshot.exists()) {
+          window.appState = snapshot.val();
+        } else {
+          await set(rosterRef, defaultEmbeddedData);
+          window.appState = defaultEmbeddedData;
+        }
+      } catch (err) {
+        console.error("DB init error:", err);
+      }
+      
+      if (typeof window.renderAll === "function") {
+        window.renderAll();
+      }
+
+      // Real-time listener across all users and tabs
+      onValue(rosterRef, (snapshot) => {
+        if (snapshot.exists()) {
+          window.appState = snapshot.val();
+          if (typeof window.renderAll === "function") {
+            window.renderAll();
+          }
+        }
+      });
+    }
+
+    window.persistState = async function() {
+      try {
+        await set(rosterRef, window.appState);
+      } catch (err) {
+        console.error("Failed to save to Database:", err);
+        alert("Failed to save changes to cloud database.");
+      }
+    };
+
+    initRealtimeDB();
+  </script>
+
   <style>
     :root {
       --bg: #f4f6fb;
@@ -701,7 +765,6 @@
 </script>
 
 <script>
-  const STORAGE_KEY = "oncall_roster_state_v2";
   const MONTHS = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -720,19 +783,12 @@
     { bg: "#e0f2fe", text: "#075985", border: "#0ea5e9" }
   ];
 
-  let appState = loadInitialState();
   let isUnlocked = false;
 
-  function loadInitialState() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-    return JSON.parse(document.getElementById("embedded-data").textContent);
-  }
-
   function persistState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+    if (typeof window.persistState === "function") {
+      window.persistState();
+    }
   }
 
   function getEngineerColor(name) {
@@ -746,7 +802,6 @@
 
   function switchTab(tabId, btn) {
     if (tabId === 'manage-tab' && !isUnlocked) {
-      // Clear PIN input box when switching to manage tab
       document.getElementById("pinInput").value = "";
       document.getElementById("pinError").style.display = "none";
     }
@@ -758,7 +813,7 @@
 
   function verifyPin() {
     const entered = document.getElementById("pinInput").value;
-    const currentPin = appState.pin || "0000";
+    const currentPin = (window.appState && window.appState.pin) ? window.appState.pin : "0000";
     if (entered === currentPin) {
       isUnlocked = true;
       document.getElementById("pinOverlay").style.display = "none";
@@ -778,7 +833,7 @@
   function updatePin() {
     const newPin = document.getElementById("newPinInput").value.trim();
     if (!newPin) return;
-    appState.pin = newPin;
+    window.appState.pin = newPin;
     persistState();
     document.getElementById("newPinInput").value = "";
     showBanner("pinChangeStatus", "PIN updated successfully!");
@@ -829,19 +884,20 @@
     return `${year}-${mm}-${dd}`;
   }
 
-  function renderAll() {
+  window.renderAll = function() {
     renderCalendarAndSummary();
     renderContacts();
     if (isUnlocked) renderManageTables();
   }
 
   function renderCalendarAndSummary() {
+    if (!window.appState) return;
     const year = parseInt(document.getElementById("yearSelect").value, 10);
     const month = parseInt(document.getElementById("monthSelect").value, 10);
     document.getElementById("calendarTitle").textContent = `${MONTHS[month]} ${year}`;
 
     const byDate = {};
-    appState.assignments.forEach(item => {
+    (window.appState.assignments || []).forEach(item => {
       if (!byDate[item.date]) byDate[item.date] = [];
       byDate[item.date].push(item.engineer);
     });
@@ -856,7 +912,7 @@
 
     const counts = {};
     const weekendCounts = {};
-    appState.contacts.forEach(c => {
+    (window.appState.contacts || []).forEach(c => {
       counts[c.name] = 0;
       weekendCounts[c.name] = 0;
     });
@@ -947,21 +1003,23 @@
   }
 
   function findCanonicalEngineerName(shortName) {
+    if (!window.appState || !window.appState.contacts) return shortName;
     const lower = shortName.trim().toLowerCase();
-    const exact = appState.contacts.find(c => c.name.toLowerCase() === lower);
+    const exact = window.appState.contacts.find(c => c.name.toLowerCase() === lower);
     if (exact) return exact.name;
-    const prefix = appState.contacts.find(c =>
+    const prefix = window.appState.contacts.find(c =>
       c.name.toLowerCase().startsWith(lower.split(" ")[0])
     );
     return prefix ? prefix.name : shortName.trim();
   }
 
   function renderContacts() {
+    if (!window.appState) return;
     const query = (document.getElementById("contactSearch").value || "").toLowerCase();
     const grid = document.getElementById("contactsGrid");
     grid.innerHTML = "";
 
-    appState.contacts
+    (window.appState.contacts || [])
       .filter(c => c.name.toLowerCase().includes(query) || (c.email || "").toLowerCase().includes(query))
       .forEach(c => {
         const col = getEngineerColor(c.name);
@@ -981,12 +1039,13 @@
   }
 
   function renderManageTables() {
+    if (!window.appState) return;
     const tbody = document.getElementById("manageContactsBody");
     const datalist = document.getElementById("engineerSuggestions");
     tbody.innerHTML = "";
     datalist.innerHTML = "";
 
-    appState.contacts.forEach((c, index) => {
+    (window.appState.contacts || []).forEach((c, index) => {
       const opt = document.createElement("option");
       opt.value = c.name;
       datalist.appendChild(opt);
@@ -1034,15 +1093,15 @@
       return;
     }
     const targetDates = getDatesBetween(start, end);
-    appState.assignments = appState.assignments.filter(a => !targetDates.includes(a.date));
+    window.appState.assignments = window.appState.assignments.filter(a => !targetDates.includes(a.date));
 
     targetDates.forEach(d => {
-      appState.assignments.push({ date: d, engineer: pri });
-      if (sec) appState.assignments.push({ date: d, engineer: sec });
+      window.appState.assignments.push({ date: d, engineer: pri });
+      if (sec) window.appState.assignments.push({ date: d, engineer: sec });
     });
 
     persistState();
-    renderAll();
+    window.renderAll();
     showBanner("manualStatus", `Updated ${targetDates.length} day(s) starting ${start}.`);
   }
 
@@ -1051,9 +1110,9 @@
     const end = document.getElementById("manualEndDate").value;
     if (!start) return;
     const targetDates = getDatesBetween(start, end);
-    appState.assignments = appState.assignments.filter(a => !targetDates.includes(a.date));
+    window.appState.assignments = window.appState.assignments.filter(a => !targetDates.includes(a.date));
     persistState();
-    renderAll();
+    window.renderAll();
     showBanner("manualStatus", `Cleared assignments for ${targetDates.length} day(s).`);
   }
 
@@ -1063,31 +1122,31 @@
     const email = document.getElementById("newContactEmail").value.trim();
     if (!name) return;
 
-    const existingIdx = appState.contacts.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
+    const existingIdx = window.appState.contacts.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
     if (existingIdx >= 0) {
-      appState.contacts[existingIdx] = { name, phone, email };
+      window.appState.contacts[existingIdx] = { name, phone, email };
     } else {
-      appState.contacts.push({ name, phone, email });
+      window.appState.contacts.push({ name, phone, email });
     }
     document.getElementById("newContactName").value = "";
     document.getElementById("newContactPhone").value = "";
     document.getElementById("newContactEmail").value = "";
     persistState();
-    renderAll();
+    window.renderAll();
     renderManageTables();
   }
 
   function editContact(idx) {
-    const c = appState.contacts[idx];
+    const c = window.appState.contacts[idx];
     document.getElementById("newContactName").value = c.name;
     document.getElementById("newContactPhone").value = c.phone;
     document.getElementById("newContactEmail").value = c.email;
   }
 
   function deleteContact(idx) {
-    appState.contacts.splice(idx, 1);
+    window.appState.contacts.splice(idx, 1);
     persistState();
-    renderAll();
+    window.renderAll();
     renderManageTables();
   }
 
@@ -1101,7 +1160,7 @@
     wsAssign["!cols"] = [{ wch: 15 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, wsAssign, "Assignments");
 
-    const sampleContacts = appState.contacts.map((c, idx) => ({
+    const sampleContacts = window.appState.contacts.map((c, idx) => ({
       "S.No.": idx + 1,
       "Engineer Name": c.name,
       "Contact": c.phone,
@@ -1116,7 +1175,7 @@
 
   function exportCurrentExcel() {
     const wb = XLSX.utils.book_new();
-    const sorted = [...appState.assignments].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...window.appState.assignments].sort((a, b) => a.date.localeCompare(b.date));
     const wsAssign = XLSX.utils.json_to_sheet(
       sorted.map(a => ({ "Date": a.date, "Engineer Name": a.engineer }))
     );
@@ -1124,7 +1183,7 @@
     XLSX.utils.book_append_sheet(wb, wsAssign, "Assignments");
 
     const wsContacts = XLSX.utils.json_to_sheet(
-      appState.contacts.map((c, i) => ({
+      window.appState.contacts.map((c, i) => ({
         "S.No.": i + 1,
         "Engineer Name": c.name,
         "Contact": c.phone,
@@ -1188,11 +1247,11 @@
 
         const mode = document.querySelector('input[name="uploadMode"]:checked').value;
         if (mode === "replace") {
-          appState.assignments = newAssignments;
+          window.appState.assignments = newAssignments;
         } else {
           const uploadedDates = new Set(newAssignments.map(a => a.date));
-          appState.assignments = [
-            ...appState.assignments.filter(a => !uploadedDates.has(a.date)),
+          window.appState.assignments = [
+            ...window.appState.assignments.filter(a => !uploadedDates.has(a.date)),
             ...newAssignments
           ];
         }
@@ -1208,12 +1267,12 @@
               email: String(r["Email"] || "").trim()
             }));
           if (parsedContacts.length > 0) {
-            appState.contacts = parsedContacts;
+            window.appState.contacts = parsedContacts;
           }
         }
 
         persistState();
-        renderAll();
+        window.renderAll();
         renderManageTables();
         showBanner("uploadStatus", `Successfully imported ${newAssignments.length} shift entries from "${file.name}".`);
       } catch (err) {
@@ -1235,9 +1294,8 @@
     }
   });
 
-  // Initialize
+  // Initialize Selectors
   initSelectors();
-  renderAll();
 </script>
 </body>
 </html>
